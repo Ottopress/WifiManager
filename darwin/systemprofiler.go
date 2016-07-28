@@ -1,6 +1,7 @@
 package darwin
 
 import (
+	"errors"
 	"os/exec"
 	"regexp"
 
@@ -8,7 +9,9 @@ import (
 )
 
 // SystemProfiler is a wrapper for the Mac OS X system_profiler command.
-type SystemProfiler struct{}
+type SystemProfiler struct {
+	outputCache *SystemProfilerOutput
+}
 
 // SystemProfilerOutput represents the output of the system_profiler command
 type SystemProfilerOutput struct {
@@ -64,7 +67,7 @@ func NewSystemProfiler() SystemProfiler {
 
 // IsInstalled returns whether or not the system_profiler executable
 // can be found in the current PATH environment variable.
-func (systemProfiler SystemProfiler) IsInstalled() bool {
+func (systemProfiler *SystemProfiler) IsInstalled() bool {
 	_, err := exec.LookPath("system_profiler")
 	if err != nil {
 		return false
@@ -72,17 +75,35 @@ func (systemProfiler SystemProfiler) IsInstalled() bool {
 	return true
 }
 
-// Run the system_profiler command and return the output struct
-func (systemProfiler SystemProfiler) Run() (*SystemProfilerOutput, error) {
-	cmd := exec.Command("system_profiler", "-detailLevel", "mini", "SPAirPortDataType", "-xml")
-	cmdOut, cmdErr := cmd.CombinedOutput()
-	if cmdErr != nil {
-		return nil, cmdErr
+// Run the system_profiler command and both cache and return the output
+func (systemProfiler *SystemProfiler) Run() (*SystemProfilerOutput, error) {
+	if systemProfiler.outputCache == nil {
+		cmd := exec.Command("system_profiler", "-detailLevel", "mini", "SPAirPortDataType", "-xml")
+		cmdOut, cmdErr := cmd.CombinedOutput()
+		if cmdErr != nil {
+			return nil, cmdErr
+		}
+		parseOut, parseErr := systemProfiler.parseOutput(cmdOut)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		systemProfiler.outputCache = parseOut
 	}
-	return systemProfiler.parseOutput(cmdOut)
+	return systemProfiler.outputCache, nil
 }
 
-func (systemProfiler SystemProfiler) parseOutput(output []byte) (*SystemProfilerOutput, error) {
+// Get returns an instance of a wireless interface if
+// one exists with the provided name
+func (systemProfiler *SystemProfiler) Get(iface string) (SystemProfilerInterface, error) {
+	for _, spIface := range systemProfiler.outputCache.SystemProfilerItems[0].SystemProfilerInterfaces {
+		if spIface.Name == iface {
+			return spIface, nil
+		}
+	}
+	return SystemProfilerInterface{}, errors.New("systemprofiler: no wireless interface found with name " + iface)
+}
+
+func (systemProfiler *SystemProfiler) parseOutput(output []byte) (*SystemProfilerOutput, error) {
 	var marshal []SystemProfilerOutput
 	_, marshalErr := plist.Unmarshal(output, &marshal)
 	if marshalErr != nil {

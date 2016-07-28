@@ -10,4 +10,5 @@ func main() {
 	systemProfiler := darwin.NewSystemProfiler()
 	fmt.Println(systemProfiler.IsInstalled())
 	fmt.Println(systemProfiler.Run())
+	fmt.Println(systemProfiler.Get("en1"))
 }
