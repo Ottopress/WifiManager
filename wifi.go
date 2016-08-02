@@ -1,11 +1,10 @@
-package main
+package wifimanager
 
 import (
 	"errors"
-	"fmt"
 	"net"
 
-	"git.getcoffee.io/ottopress/WifiManager/darwin"
+	"git.getcoffee.io/ottopress/wifimanager/darwin"
 )
 
 const (
@@ -186,30 +185,4 @@ func Prerequisites() bool {
 		return false
 	}
 	return true
-}
-
-func main() {
-	Prerequisites()
-	interfaces, interfacesErr := GetWifiInterfaces()
-	if interfacesErr != nil {
-		fmt.Println(interfacesErr)
-	}
-	iface := interfaces[0]
-	networks, scanErr := iface.Scan()
-	if scanErr != nil {
-		fmt.Println(scanErr)
-	}
-	fmt.Println(networks)
-	accessPoints, apErr := GetAPs("PrettiestWifi", networks)
-	if apErr != nil {
-		fmt.Println(apErr)
-	}
-	accessPoint, bestErr := GetBestAP(accessPoints)
-	if bestErr != nil {
-		fmt.Println(bestErr)
-	}
-	accessPoint.UpdateSecurityKey("abcdefghijklmnopqrstuvwxyz")
-	iface.UpdateNetwork(accessPoint)
-	iface.Disconnect()
-	iface.Connect()
 }
