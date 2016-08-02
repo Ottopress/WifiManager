@@ -93,6 +93,17 @@ func (airport *AirPort) Get(ssid string) []AirPortNetwork {
 	return possibleNetworks
 }
 
+// Disconnect disconnects from the current network without shutting
+// down the interface
+func (airport *AirPort) Disconnect() error {
+	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport", "--disassociate")
+	_, cmdErr := cmd.CombinedOutput()
+	if cmdErr != nil {
+		return cmdErr
+	}
+	return nil
+}
+
 func (airport *AirPort) parseOutput(output []byte) ([]AirPortNetwork, error) {
 	var networks []AirPortNetwork
 	_, marshalErr := plist.Unmarshal(output, &networks)

@@ -150,6 +150,16 @@ func (wifiInterface *WifiInterface) Connect() error {
 	return nil
 }
 
+// Disconnect disconnects from the current network without shutting
+// down the interface
+func (wifiInterface *WifiInterface) Disconnect() error {
+	disconnectErr := airport.Disconnect()
+	if disconnectErr != nil {
+		return disconnectErr
+	}
+	return nil
+}
+
 // UpdateSecurityKey updates the security key of the network
 func (wifiNetwork *WifiNetwork) UpdateSecurityKey(key string) {
 	wifiNetwork.SecurityKey = key
@@ -163,7 +173,6 @@ func Prerequisites() bool {
 		"networkSetup":   networkSetup.IsInstalled(),
 		"systemProfiler": systemProfiler.IsInstalled(),
 	}
-	fmt.Println(commandList)
 
 	needList := []string{}
 
@@ -201,5 +210,6 @@ func main() {
 	}
 	accessPoint.UpdateSecurityKey("abcdefghijklmnopqrstuvwxyz")
 	iface.UpdateNetwork(accessPoint)
+	iface.Disconnect()
 	iface.Connect()
 }
