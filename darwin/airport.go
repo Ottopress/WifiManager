@@ -81,6 +81,18 @@ func (airport *AirPort) Scan() ([]AirPortNetwork, error) {
 	return parseOut, nil
 }
 
+// Get all networks that match the provided SSID
+func (airport *AirPort) Get(ssid string) []AirPortNetwork {
+	possibleNetworks := []AirPortNetwork{}
+	for index := range airport.outputCache {
+		network := airport.outputCache[index]
+		if network.SSID == ssid {
+			possibleNetworks = append(possibleNetworks, network)
+		}
+	}
+	return possibleNetworks
+}
+
 func (airport *AirPort) parseOutput(output []byte) ([]AirPortNetwork, error) {
 	var networks []AirPortNetwork
 	_, marshalErr := plist.Unmarshal(output, &networks)

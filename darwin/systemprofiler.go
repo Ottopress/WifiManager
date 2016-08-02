@@ -8,6 +8,17 @@ import (
 	"github.com/DHowett/go-plist"
 )
 
+const (
+	// IfaceConnected state indicates the itnerface is on and
+	// connected.
+	IfaceConnected int = iota
+	// IfaceDisassociated state indicates the interface is on but
+	// doesn't have an active connection
+	IfaceDisassociated
+	// IfaceOff state indicates the interface is off.
+	IfaceOff
+)
+
 // SystemProfiler is a wrapper for the Mac OS X system_profiler command.
 type SystemProfiler struct {
 	outputCache *SystemProfilerOutput
@@ -35,6 +46,7 @@ type SystemProfilerInterface struct {
 	Name          string `plist:"_name"`
 	Vendor        string
 	ID            string
+	Status        int
 	SPAirDrop     string `plist:"spairport_caps_airdrop"`
 	SPWoW         string `plist:"spairport_caps_wow"`
 	SPStatus      string `plist:"spairport_status_connected"`
@@ -119,6 +131,14 @@ func (systemProfiler *SystemProfiler) parseOutput(output []byte) (*SystemProfile
 		if cardAttr != nil {
 			systemProfilerInterface.Vendor = cardAttr[0][1]
 			systemProfilerInterface.ID = cardAttr[0][2]
+		}
+		switch systemProfilerInterface.SPStatus {
+		case "spairport_status_connected":
+			systemProfilerInterface.Status = IfaceConnected
+		case "spairport_status_disassociated":
+			systemProfilerInterface.Status = IfaceDisassociated
+		case "spairport_status_off":
+			systemProfilerInterface.Status = IfaceOff
 		}
 	}
 	return systemProfilerOutput, nil
