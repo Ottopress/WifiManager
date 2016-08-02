@@ -20,7 +20,7 @@ const (
 
 // AirPort is a wrapper for the Mac OS X airport command
 type AirPort struct {
-	outputCache *[]AirPortNetwork
+	outputCache []AirPortNetwork
 }
 
 // AirPortNetwork represents a WiFi network from the output
@@ -66,7 +66,7 @@ func (airport *AirPort) IsInstalled() bool {
 }
 
 // Scan using the airport command and both cache and return the output
-func (airport *AirPort) Scan() (*[]AirPortNetwork, error) {
+func (airport *AirPort) Scan() ([]AirPortNetwork, error) {
 	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport", "-s", "-x")
 	cmdOut, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
@@ -81,7 +81,7 @@ func (airport *AirPort) Scan() (*[]AirPortNetwork, error) {
 	return parseOut, nil
 }
 
-func (airport *AirPort) parseOutput(output []byte) (*[]AirPortNetwork, error) {
+func (airport *AirPort) parseOutput(output []byte) ([]AirPortNetwork, error) {
 	var networks []AirPortNetwork
 	_, marshalErr := plist.Unmarshal(output, &networks)
 	if marshalErr != nil {
@@ -99,5 +99,5 @@ func (airport *AirPort) parseOutput(output []byte) (*[]AirPortNetwork, error) {
 			network.Security = None
 		}
 	}
-	return &networks, nil
+	return networks, nil
 }
