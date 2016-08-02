@@ -77,18 +77,16 @@ func (systemProfiler *SystemProfiler) IsInstalled() bool {
 
 // Run the system_profiler command and both cache and return the output
 func (systemProfiler *SystemProfiler) Run() (*SystemProfilerOutput, error) {
-	if systemProfiler.outputCache == nil {
-		cmd := exec.Command("system_profiler", "-detailLevel", "mini", "SPAirPortDataType", "-xml")
-		cmdOut, cmdErr := cmd.CombinedOutput()
-		if cmdErr != nil {
-			return nil, cmdErr
-		}
-		parseOut, parseErr := systemProfiler.parseOutput(cmdOut)
-		if parseErr != nil {
-			return nil, parseErr
-		}
-		systemProfiler.outputCache = parseOut
+	cmd := exec.Command("system_profiler", "-detailLevel", "mini", "SPAirPortDataType", "-xml")
+	cmdOut, cmdErr := cmd.CombinedOutput()
+	if cmdErr != nil {
+		return nil, cmdErr
 	}
+	parseOut, parseErr := systemProfiler.parseOutput(cmdOut)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+	systemProfiler.outputCache = parseOut
 	return systemProfiler.outputCache, nil
 }
 
