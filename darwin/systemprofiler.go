@@ -74,8 +74,8 @@ type SystemProfilerSoftware struct {
 
 // NewSystemProfiler creates a new instance of a SystemProfiler
 // command wrapper.
-func NewSystemProfiler() SystemProfiler {
-	return SystemProfiler{}
+func NewSystemProfiler() *SystemProfiler {
+	return &SystemProfiler{}
 }
 
 // IsInstalled returns whether or not the system_profiler executable

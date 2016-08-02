@@ -12,8 +12,8 @@ type NetworkSetup struct{}
 
 // NewNetworkSetup creates a new instance of a NetworkSetup
 // command wrapper.
-func NewNetworkSetup() NetworkSetup {
-	return NetworkSetup{}
+func NewNetworkSetup() *NetworkSetup {
+	return &NetworkSetup{}
 }
 
 // IsInstalled returns whether or not the networksetup executable

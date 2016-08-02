@@ -9,7 +9,7 @@ import (
 
 const (
 	// WPA represents the WPA WiFi security protocol
-	WPA WifiSecurity = iota
+	WPA int = iota
 	// WEP represents the WEP WiFi security protocol
 	WEP
 	// WPA2 represents the WPA2/RSN WiFi security protocol
@@ -27,7 +27,7 @@ type AirPort struct {
 // of the airport command
 type AirPortNetwork struct {
 	SSID           string `plist:"SSID_STR"`
-	Security       WifiSecurity
+	Security       int
 	BSSID          string          `plist:"BSSID"`
 	Channel        int             `plist:"CHANNEL"`
 	TxRate         []int           `plist:"RATES"`
@@ -50,8 +50,8 @@ type WifiSecurity int
 
 // NewAirPort creates a new instance of the AirPort
 // command wrapper.
-func NewAirPort() AirPort {
-	return AirPort{}
+func NewAirPort() *AirPort {
+	return &AirPort{}
 }
 
 // IsInstalled returns whether or not the airport executable
