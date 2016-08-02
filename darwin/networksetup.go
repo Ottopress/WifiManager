@@ -1,6 +1,11 @@
 package darwin
 
-import "os/exec"
+import (
+	"errors"
+	"os/exec"
+	"regexp"
+	"strconv"
+)
 
 // NetworkSetup is a wrapper for the Mac OS X networksetup command.
 type NetworkSetup struct{}
@@ -50,4 +55,26 @@ func (networkSetup *NetworkSetup) Down(iface string) error {
 		return cmdErr
 	}
 	return nil
+}
+
+// GetMTU returns the MTU value of the provided interface
+func (networkSetup *NetworkSetup) GetMTU(iface string) (int, error) {
+	cmd := exec.Command("networksetup", "-getMTU", iface)
+	cmdOut, cmdErr := cmd.CombinedOutput()
+	if cmdErr != nil {
+		return 0, cmdErr
+	}
+	regexMtu, regexErr := regexp.Compile(`.*: (\d+).*`)
+	if regexErr != nil {
+		return 0, regexErr
+	}
+	mtuVal := regexMtu.FindAllStringSubmatch(string(cmdOut), -1)
+	if mtuVal != nil {
+		conv, convErr := strconv.Atoi(mtuVal[0][1])
+		if convErr != nil {
+			return 0, convErr
+		}
+		return conv, nil
+	}
+	return 0, errors.New("networksetup: mtu couldn't be parsed")
 }

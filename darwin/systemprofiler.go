@@ -47,9 +47,10 @@ type SystemProfilerInterface struct {
 	Vendor        string
 	ID            string
 	Status        int
+	MTU           int
 	SPAirDrop     string `plist:"spairport_caps_airdrop"`
 	SPWoW         string `plist:"spairport_caps_wow"`
-	SPStatus      string `plist:"spairport_status_connected"`
+	SPStatus      string `plist:"spairport_status_information"`
 	SPChannels    []int  `plist:"spairport_supported_channels"`
 	SPPhyModes    string `plist:"spairport_supported_phymodes"`
 	SPCardType    string `plist:"spairport_wireless_card_type"`
@@ -88,13 +89,13 @@ func (systemProfiler *SystemProfiler) IsInstalled() bool {
 }
 
 // Run the system_profiler command and both cache and return the output
-func (systemProfiler *SystemProfiler) Run() (*SystemProfilerOutput, error) {
+func (systemProfiler *SystemProfiler) Run(networkSetup *NetworkSetup) (*SystemProfilerOutput, error) {
 	cmd := exec.Command("system_profiler", "-detailLevel", "mini", "SPAirPortDataType", "-xml")
 	cmdOut, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-	parseOut, parseErr := systemProfiler.parseOutput(cmdOut)
+	parseOut, parseErr := systemProfiler.parseOutput(cmdOut, networkSetup)
 	if parseErr != nil {
 		return nil, parseErr
 	}
@@ -113,33 +114,68 @@ func (systemProfiler *SystemProfiler) Get(iface string) (SystemProfilerInterface
 	return SystemProfilerInterface{}, errors.New("systemprofiler: no wireless interface found with name " + iface)
 }
 
-func (systemProfiler *SystemProfiler) parseOutput(output []byte) (*SystemProfilerOutput, error) {
+func (systemProfiler *SystemProfiler) parseOutput(output []byte, networkSetup *NetworkSetup) (*SystemProfilerOutput, error) {
 	var marshal []SystemProfilerOutput
 	_, marshalErr := plist.Unmarshal(output, &marshal)
 	if marshalErr != nil {
 		return nil, marshalErr
 	}
 	systemProfilerOutput := &marshal[0]
-	// regexCardAttr captures the vendor and ID from the card type attribute
-	regexCardAttr, regexErr := regexp.Compile(`.*\((.+), (.+)\).*`)
-	if regexErr != nil {
-		return nil, regexErr
-	}
 	for index := range systemProfilerOutput.SystemProfilerItems[0].SystemProfilerInterfaces {
 		systemProfilerInterface := &systemProfilerOutput.SystemProfilerItems[0].SystemProfilerInterfaces[index]
-		cardAttr := regexCardAttr.FindAllStringSubmatch(systemProfilerInterface.SPCardType, -1)
-		if cardAttr != nil {
-			systemProfilerInterface.Vendor = cardAttr[0][1]
-			systemProfilerInterface.ID = cardAttr[0][2]
+		attrErr := systemProfilerInterface.UpdateCardAttrs()
+		if attrErr != nil {
+			return nil, attrErr
 		}
-		switch systemProfilerInterface.SPStatus {
-		case "spairport_status_connected":
-			systemProfilerInterface.Status = IfaceConnected
-		case "spairport_status_disassociated":
-			systemProfilerInterface.Status = IfaceDisassociated
-		case "spairport_status_off":
-			systemProfilerInterface.Status = IfaceOff
+		statusErr := systemProfilerInterface.UpdateStatus()
+		if statusErr != nil {
+			return nil, statusErr
+		}
+		mtuErr := systemProfilerInterface.UpdateMTU(networkSetup)
+		if mtuErr != nil {
+			return nil, mtuErr
 		}
 	}
 	return systemProfilerOutput, nil
+}
+
+// UpdateMTU updates the MTU value of the interface
+func (systemProfilerInterface *SystemProfilerInterface) UpdateMTU(networkSetup *NetworkSetup) error {
+	mtu, mtuErr := networkSetup.GetMTU(systemProfilerInterface.Name)
+	if mtuErr != nil {
+		return mtuErr
+	}
+	systemProfilerInterface.MTU = mtu
+	return nil
+}
+
+// UpdateCardAttrs updates the Vendor and ID fields of the
+// interface
+func (systemProfilerInterface *SystemProfilerInterface) UpdateCardAttrs() error {
+	// regexCardAttr captures the vendor and ID from the card type attribute
+	regexCardAttr, regexErr := regexp.Compile(`.*\((.+), (.+)\).*`)
+	if regexErr != nil {
+		return regexErr
+	}
+	cardAttr := regexCardAttr.FindAllStringSubmatch(systemProfilerInterface.SPCardType, -1)
+	if cardAttr != nil {
+		systemProfilerInterface.Vendor = cardAttr[0][1]
+		systemProfilerInterface.ID = cardAttr[0][2]
+	}
+	return nil
+}
+
+// UpdateStatus updates the connection status of the interface
+func (systemProfilerInterface *SystemProfilerInterface) UpdateStatus() error {
+	switch systemProfilerInterface.SPStatus {
+	case "spairport_status_connected":
+		systemProfilerInterface.Status = IfaceConnected
+	case "spairport_status_disassociated":
+		systemProfilerInterface.Status = IfaceDisassociated
+	case "spairport_status_off":
+		systemProfilerInterface.Status = IfaceOff
+	default:
+		return errors.New("systemprofiler: unrecognized status " + systemProfilerInterface.SPStatus)
+	}
+	return nil
 }
