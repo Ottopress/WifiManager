@@ -129,7 +129,7 @@ func GetBestAP(accessPoints []WifiNetwork) (WifiNetwork, error) {
 	if len(accessPoints) == 1 {
 		return accessPoints[0], nil
 	}
-	var bestAP WifiNetwork
+	bestAP := accessPoints[0]
 	for _, accessPoint := range accessPoints {
 		if accessPoint.QualityLevel > bestAP.QualityLevel {
 			bestAP = accessPoint
@@ -168,6 +168,15 @@ func (wifiInterface *WifiInterface) Connect() error {
 		return connectErr
 	}
 	return nil
+}
+
+// Status returns the power state of the WiFi interface
+func (wifiInterface *WifiInterface) Status() (bool, error) {
+	status, statusErr := networkSetup.Status(wifiInterface.Name)
+	if statusErr != nil {
+		return false, statusErr
+	}
+	return status, nil
 }
 
 // Disconnect disconnects from the current network without shutting

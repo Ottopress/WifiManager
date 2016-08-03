@@ -37,9 +37,33 @@ func (networkSetup *NetworkSetup) Connect(iface, ssid, password string) error {
 	return nil
 }
 
+// Status returns the power state of the provided interface
+func (networkSetup *NetworkSetup) Status(iface string) (bool, error) {
+	cmd := exec.Command("networksetup", "-getairportpower", iface)
+	cmdOut, cmdErr := cmd.CombinedOutput()
+	if cmdErr != nil {
+		return false, cmdErr
+	}
+	regexStatus, regexErr := regexp.Compile(`.+: (.+).*`)
+	if regexErr != nil {
+		return false, regexErr
+	}
+	regexStatusOut := regexStatus.FindAllStringSubmatch(string(cmdOut), -1)
+	if regexStatusOut != nil {
+		if regexStatusOut[0][1] == "On" {
+			return true, nil
+		} else if regexStatusOut[0][1] == "Off" {
+			return false, nil
+		} else {
+			return false, errors.New("networksetup: unknown interface power state")
+		}
+	}
+	return true, errors.New("networksetup: interface power state could not be parsed")
+}
+
 // Up turns on the provided interface
 func (networkSetup *NetworkSetup) Up(iface string) error {
-	cmd := exec.Command("networksetup", "-setirportpower", iface, "on")
+	cmd := exec.Command("networksetup", "-setairportpower", iface, "on")
 	_, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		return cmdErr
@@ -49,7 +73,7 @@ func (networkSetup *NetworkSetup) Up(iface string) error {
 
 // Down turns off the provided interface
 func (networkSetup *NetworkSetup) Down(iface string) error {
-	cmd := exec.Command("networksetup", "-setirportpower", iface, "off")
+	cmd := exec.Command("networksetup", "-setairportpower", iface, "off")
 	_, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		return cmdErr
