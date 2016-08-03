@@ -143,6 +143,24 @@ func (wifiInterface *WifiInterface) UpdateNetwork(network WifiNetwork) {
 	wifiInterface.Connection = network
 }
 
+// Up turns on the WiFi interface
+func (wifiInterface *WifiInterface) Up() error {
+	upErr := networkSetup.Up(wifiInterface.Name)
+	if upErr != nil {
+		return upErr
+	}
+	return nil
+}
+
+// Down turns off the WiFi interface
+func (wifiInterface *WifiInterface) Down() error {
+	downErr := networkSetup.Down(wifiInterface.Name)
+	if downErr != nil {
+		return downErr
+	}
+	return nil
+}
+
 // Connect the interface to the current WiFi connection
 func (wifiInterface *WifiInterface) Connect() error {
 	connectErr := networkSetup.Connect(wifiInterface.Name, wifiInterface.Connection.SSID, wifiInterface.Connection.SecurityKey)
