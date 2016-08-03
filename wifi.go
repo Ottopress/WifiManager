@@ -68,6 +68,9 @@ func GetWifiInterfaces() ([]WifiInterface, error) {
 		}
 	}
 
+	if len(wifiInterfaces) < 1 {
+		return nil, errors.New("wifi: no wifi interfaces found")
+	}
 	return wifiInterfaces, nil
 }
 
