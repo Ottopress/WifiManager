@@ -30,6 +30,8 @@ var (
 	airport        = darwin.NewAirPort()
 	networkSetup   = darwin.NewNetworkSetup()
 	systemProfiler = darwin.NewSystemProfiler()
+
+	ErrMissingAP = errors.New("wifi: no wifi interfaces found")
 )
 
 // WifiInterface represents a physical WiFi interface
