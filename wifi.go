@@ -31,7 +31,8 @@ var (
 	networkSetup   = darwin.NewNetworkSetup()
 	systemProfiler = darwin.NewSystemProfiler()
 
-	ErrMissingAP = errors.New("wifi: no wifi interfaces found")
+	ErrMissingIface = errors.New("wifi: no wifi interfaces found")
+	ErrMissingAP    = errors.New("wifi: no access point found with provided name")
 )
 
 // WifiInterface represents a physical WiFi interface
@@ -71,7 +72,7 @@ func GetWifiInterfaces() ([]WifiInterface, error) {
 	}
 
 	if len(wifiInterfaces) < 1 {
-		return nil, errors.New("wifi: no wifi interfaces found")
+		return nil, ErrMissingIface
 	}
 	return wifiInterfaces, nil
 }
@@ -97,7 +98,6 @@ func (wifiInterface *WifiInterface) Scan() ([]WifiNetwork, error) {
 	if airportErr != nil {
 		return nil, airportErr
 	}
-
 	wifiNetworks := []WifiNetwork{}
 	for _, network := range airportNetworks {
 		wifiNetwork := WifiNetwork{}
@@ -120,7 +120,7 @@ func GetAPs(ssid string, networks []WifiNetwork) ([]WifiNetwork, error) {
 		}
 	}
 	if len(accessPoints) < 1 {
-		return accessPoints, errors.New("wifi: no access points found with SSID " + ssid)
+		return accessPoints, ErrMissingAP
 	}
 	return accessPoints, nil
 }
