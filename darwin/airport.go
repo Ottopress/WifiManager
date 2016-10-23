@@ -32,6 +32,13 @@ const (
 	EAP
 	// AirPortRE is the regex used to parse the output of the
 	// Mac OS X airport command
+	// </br>
+	// It should be noted that while this may not be the most optimal
+	// solution, it is faster than parsing the plist simply due to the
+	// considerable amount of data that is provided with the plist
+	// format as opposed to running the command normally. As such,
+	// this regex will stay until speed becomes a concern or the need
+	// arises for the extra data that plist provides.
 	AirPortRE = "\\s*([a-zA-Z0-9-_\\s ]*)\\s*([a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2})\\s*([-|+]{1}[0-9]*)\\s*([0-9]*),*[-|+]*[0-9]*\\s*([Y|N]{1})\\s*([A-Z-]*)\\s*(NONE|(?:[a-zA-Z0-9]+))(?:\\((.+?)\\/(.+?)(?:,(.+?))?\\/(.+?)\\))?\\s+?(?:([a-zA-Z0-9]+)\\((.+?)\\/(.+?)(?:,(.+?))?\\/(.+?)\\))?"
 )
 
