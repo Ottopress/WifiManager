@@ -3,7 +3,6 @@ package darwin
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -108,19 +107,15 @@ func (airport *AirPort) IsInstalled() bool {
 
 // Scan using the airport command and both cache and return the output
 func (airport *AirPort) Scan() ([]AirPortNetwork, error) {
-	fmt.Println("Starting Exec")
 	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport", "-s")
 	cmdOut, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-	fmt.Println("Ending Exec")
-	fmt.Println("Starting Parse")
 	parseOut, parseErr := airport.parseOutput(cmdOut)
 	if parseErr != nil {
 		return nil, parseErr
 	}
-	fmt.Println("Ending Parse")
 	airport.outputCache = parseOut
 	return parseOut, nil
 }

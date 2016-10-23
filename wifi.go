@@ -2,7 +2,6 @@ package wifimanager
 
 import (
 	"errors"
-	"fmt"
 	"net"
 
 	"github.com/ottopress/WifiManager/darwin"
@@ -112,13 +111,10 @@ func NewWifiInterface(iface net.Interface) (WifiInterface, error) {
 
 // Scan returns a list of all reachable WiFi networks
 func (wifiInterface *WifiInterface) Scan() ([]WifiNetwork, error) {
-	fmt.Println("Starting scan")
 	airportNetworks, airportErr := airport.Scan()
-	fmt.Println("Middle part")
 	if airportErr != nil {
 		return nil, airportErr
 	}
-	fmt.Println("Ending scan")
 	wifiNetworks := []WifiNetwork{}
 	for _, network := range airportNetworks {
 		security := []WifiNetworkSecurity{}
