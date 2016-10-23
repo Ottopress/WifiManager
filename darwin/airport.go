@@ -1,10 +1,14 @@
 package darwin
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
-
-	"github.com/DHowett/go-plist"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -14,8 +18,49 @@ const (
 	WEP
 	// WPA2 represents the WPA2/RSN WiFi security protocol
 	WPA2
-	// None represents an open WiFi network
-	None
+	// NONE represents an open WiFi network
+	NONE
+	// AES represents the AES-based CCMP integrity check
+	// protocol.
+	AES int = iota
+	// TKIP represents the TKIP integrity check protocol
+	TKIP
+	// PSK represents the PSK authentication method for the
+	// WiFi network
+	PSK int = iota
+	// EAP represents the EAP/802.1x authentication method for
+	// the WiFi network
+	EAP
+	// AirPortRE is the regex used to parse the output of the
+	// Mac OS X airport command
+	AirPortRE = "\\s*([a-zA-Z0-9-_\\s ]*)\\s*([a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2})\\s*([-|+]{1}[0-9]*)\\s*([0-9]*),*[-|+]*[0-9]*\\s*([Y|N]{1})\\s*([A-Z-]*)\\s*(NONE|(?:[a-zA-Z0-9]+))(?:\\((.+?)\\/(.+?)(?:,(.+?))?\\/(.+?)\\))?\\s+?(?:([a-zA-Z0-9]+)\\((.+?)\\/(.+?)(?:,(.+?))?\\/(.+?)\\))?"
+)
+
+var (
+	// AirPortCompiledRE is the compiled regex of the AirPortRE
+	// constant. This is initialized outside any method scope
+	// to prevent redundant computing.
+	AirPortCompiledRE = regexp.MustCompile(AirPortRE)
+	// ProtoConv is a map of the different protocol values to their
+	// respective constant values
+	ProtoConv = map[string]int{
+		"WPA":  WPA,
+		"WEP":  WEP,
+		"WPA2": WPA2,
+		"NONE": NONE,
+	}
+	// CipherConv is a map of the different available ciphers to
+	// their respective constant values
+	CipherConv = map[string]int{
+		"AES":  AES,
+		"TKIP": TKIP,
+	}
+	// AuthConv is a map of the different available authentication
+	// methods to their respective constant values.
+	AuthConv = map[string]int{
+		"PSK":    PSK,
+		"802.1x": EAP,
+	}
 )
 
 // AirPort is a wrapper for the Mac OS X airport command
@@ -26,27 +71,23 @@ type AirPort struct {
 // AirPortNetwork represents a WiFi network from the output
 // of the airport command
 type AirPortNetwork struct {
-	SSID           string `plist:"SSID_STR"`
-	Security       int
-	BSSID          string          `plist:"BSSID"`
-	Channel        int             `plist:"CHANNEL"`
-	TxRate         []int           `plist:"RATES"`
-	NoiseLevel     int             `plist:"NOISE"`
-	QualityLevel   int             `plist:"RSSI"`
-	APMode         int             `plist:"AP_MODE"`
-	BeaconInterval int             `plist:"BEACON_INT"`
-	SecurityRSN    *WifiSecurityIE `plist:"RSN_IE"`
-	SecurityWPA    *WifiSecurityIE `plist:"WPA_IE"`
-	SecurityWEP    *WifiSecurityIE `plist:"WEP_IE"`
+	SSID        string
+	BSSID       string
+	RSSI        int
+	Channel     int
+	HT          bool
+	CountryCode string
+	Security    []AirPortNetworkSecurity
 }
 
-// WifiSecurityIE represents the different possible WiFi security types
-// represented in the XML as dicts. This is empty since we care only about
-// the presence of the dicts and not about the contents.
-type WifiSecurityIE struct{}
-
-// WifiSecurity is an enum for the different WiFi security protocols
-type WifiSecurity int
+// AirPortNetworkSecurity represents a WiFi network's different
+// security parameters
+type AirPortNetworkSecurity struct {
+	Protocol int
+	Method   int
+	Unicasts []int
+	Group    int
+}
 
 // NewAirPort creates a new instance of the AirPort
 // command wrapper.
@@ -67,16 +108,19 @@ func (airport *AirPort) IsInstalled() bool {
 
 // Scan using the airport command and both cache and return the output
 func (airport *AirPort) Scan() ([]AirPortNetwork, error) {
-	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport", "-s", "-x")
+	fmt.Println("Starting Exec")
+	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/A/Resources/airport", "-s")
 	cmdOut, cmdErr := cmd.CombinedOutput()
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-
+	fmt.Println("Ending Exec")
+	fmt.Println("Starting Parse")
 	parseOut, parseErr := airport.parseOutput(cmdOut)
 	if parseErr != nil {
 		return nil, parseErr
 	}
+	fmt.Println("Ending Parse")
 	airport.outputCache = parseOut
 	return parseOut, nil
 }
@@ -106,21 +150,73 @@ func (airport *AirPort) Disconnect() error {
 
 func (airport *AirPort) parseOutput(output []byte) ([]AirPortNetwork, error) {
 	var networks []AirPortNetwork
-	_, marshalErr := plist.Unmarshal(output, &networks)
-	if marshalErr != nil {
-		return nil, marshalErr
-	}
-	for index := range networks {
-		network := &networks[index]
-		if network.SecurityRSN != nil {
-			network.Security = WPA2
-		} else if network.SecurityWPA != nil {
-			network.Security = WPA
-		} else if network.SecurityWEP != nil {
-			network.Security = WEP
-		} else {
-			network.Security = None
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		network, networkErr := airport.parseSingle(scanner.Text())
+		if networkErr != nil {
+			return networks, networkErr
+		}
+		if network != nil {
+			networks = append(networks, *network)
 		}
 	}
 	return networks, nil
+}
+
+// parseSingle item takes a single piece of text and returns
+// the most complete possible AirPortNetwork struct, or nil
+// if there are no matches found.
+// </br>
+// parseSingle assumes the format of the item is:
+// <SSID> <BSSID> <RSSI> <Channel> <HT> <CC> <SecProto>(<SecMeth>/<Ciphers>/<Group Cipher>)
+func (airport *AirPort) parseSingle(item string) (*AirPortNetwork, error) {
+	matches := AirPortCompiledRE.FindStringSubmatch(item)
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	matches = matches[1:]
+	rssiVal, rssiErr := strconv.Atoi(matches[2])
+	if rssiErr != nil {
+		return nil, rssiErr
+	}
+	var htVal bool
+	if matches[4] == "Y" {
+		htVal = true
+	} else {
+		htVal = false
+	}
+	channelVal, channelErr := strconv.Atoi(matches[3])
+	if channelErr != nil {
+		return nil, channelErr
+	}
+	security := []AirPortNetworkSecurity{}
+	if matches[6] != "NONE" {
+		for i := 6; i < len(matches); i += 5 {
+			unicasts := []int{}
+			unicasts = append(unicasts, CipherConv[matches[i+2]])
+			if matches[i+2] != "" {
+				unicasts = append(unicasts, CipherConv[matches[i+3]])
+			}
+			security = append(security, AirPortNetworkSecurity{
+				Protocol: ProtoConv[matches[i]],
+				Method:   AuthConv[matches[i+1]],
+				Unicasts: unicasts,
+				Group:    CipherConv[matches[i+4]],
+			})
+		}
+	} else {
+		security = append(security, AirPortNetworkSecurity{Protocol: ProtoConv[matches[6]]})
+	}
+
+	return &AirPortNetwork{
+		SSID:        strings.Trim(matches[0], " "),
+		BSSID:       strings.Trim(matches[1], " "),
+		RSSI:        rssiVal,
+		Channel:     channelVal,
+		HT:          htVal,
+		CountryCode: strings.Trim(matches[5], " "),
+		Security:    security,
+	}, nil
 }

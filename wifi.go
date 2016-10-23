@@ -2,9 +2,10 @@ package wifimanager
 
 import (
 	"errors"
+	"fmt"
 	"net"
 
-	"git.getcoffee.io/ottopress/wifimanager/darwin"
+	"github.com/ottopress/WifiManager/darwin"
 )
 
 const (
@@ -31,8 +32,12 @@ var (
 	networkSetup   = darwin.NewNetworkSetup()
 	systemProfiler = darwin.NewSystemProfiler()
 
+	// ErrMissingIface should be returned if no interfaces could be found
+	// while getting available interfaces
 	ErrMissingIface = errors.New("wifi: no wifi interfaces found")
-	ErrMissingAP    = errors.New("wifi: no access point found with provided name")
+	// ErrMissingAP should be returned if scanning for an access point with
+	// a specific SSID yielded no results
+	ErrMissingAP = errors.New("wifi: no access point found with provided name")
 )
 
 // WifiInterface represents a physical WiFi interface
@@ -45,12 +50,22 @@ type WifiInterface struct {
 
 // WifiNetwork represents a discovered WiFi network
 type WifiNetwork struct {
-	SSID         string
-	Channel      int
-	SecurityType int
-	SecurityKey  string
-	QualityLevel int
-	NoiseLevel   int
+	SSID        string
+	BSSID       string
+	RSSI        int
+	HT          bool
+	Channel     int
+	Security    []WifiNetworkSecurity
+	SecurityKey string
+}
+
+// WifiNetworkSecurity represents the security configuration of
+// a WiFi network.
+type WifiNetworkSecurity struct {
+	Protocol int
+	Method   int
+	Unicasts []int
+	Group    int
 }
 
 // GetWifiInterfaces returns a list of all active Wifi interfaces
@@ -59,10 +74,13 @@ func GetWifiInterfaces() ([]WifiInterface, error) {
 
 	netInterfaces, netErr := net.Interfaces()
 	if netErr != nil {
-		return nil, netErr
+		return wifiInterfaces, netErr
 	}
 
-	systemProfiler.Run(networkSetup)
+	_, runErr := systemProfiler.Run(networkSetup)
+	if runErr != nil {
+		return wifiInterfaces, runErr
+	}
 	for _, iface := range netInterfaces {
 		_, spErr := systemProfiler.Get(iface.Name)
 		if spErr == nil {
@@ -72,7 +90,7 @@ func GetWifiInterfaces() ([]WifiInterface, error) {
 	}
 
 	if len(wifiInterfaces) < 1 {
-		return nil, ErrMissingIface
+		return wifiInterfaces, ErrMissingIface
 	}
 	return wifiInterfaces, nil
 }
@@ -94,19 +112,32 @@ func NewWifiInterface(iface net.Interface) (WifiInterface, error) {
 
 // Scan returns a list of all reachable WiFi networks
 func (wifiInterface *WifiInterface) Scan() ([]WifiNetwork, error) {
+	fmt.Println("Starting scan")
 	airportNetworks, airportErr := airport.Scan()
+	fmt.Println("Middle part")
 	if airportErr != nil {
 		return nil, airportErr
 	}
+	fmt.Println("Ending scan")
 	wifiNetworks := []WifiNetwork{}
 	for _, network := range airportNetworks {
-		wifiNetwork := WifiNetwork{}
-		wifiNetwork.SSID = network.SSID
-		wifiNetwork.Channel = network.Channel
-		wifiNetwork.SecurityType = network.Security
-		wifiNetwork.QualityLevel = network.QualityLevel
-		wifiNetwork.NoiseLevel = network.NoiseLevel
-		wifiNetworks = append(wifiNetworks, wifiNetwork)
+		security := []WifiNetworkSecurity{}
+		for _, airSecurity := range network.Security {
+			security = append(security, WifiNetworkSecurity{
+				Protocol: airSecurity.Protocol,
+				Method:   airSecurity.Method,
+				Unicasts: airSecurity.Unicasts,
+				Group:    airSecurity.Group,
+			})
+		}
+		wifiNetworks = append(wifiNetworks, WifiNetwork{
+			SSID:     network.SSID,
+			BSSID:    network.BSSID,
+			RSSI:     network.RSSI,
+			Channel:  network.Channel,
+			Security: security,
+			HT:       network.HT,
+		})
 	}
 	return wifiNetworks, nil
 }
@@ -133,7 +164,7 @@ func GetBestAP(accessPoints []WifiNetwork) (WifiNetwork, error) {
 	}
 	bestAP := accessPoints[0]
 	for _, accessPoint := range accessPoints {
-		if accessPoint.QualityLevel > bestAP.QualityLevel {
+		if accessPoint.RSSI < bestAP.RSSI {
 			bestAP = accessPoint
 		}
 	}
